@@ -1,0 +1,265 @@
+#include <SFML/Graphics.hpp> 
+#include <vector> //dynamic arrays, list of objects
+#include <cstdlib> //for randomness
+#include <ctime> // for time related functions
+#include <string>
+
+using namespace std;
+
+// ================= BULLET =================
+class Bullet {
+private:
+    sf::CircleShape shape; //composition shape object
+    float speed;
+
+public:
+    Bullet(float x, float y) {
+        shape.setRadius(5.f);  //radius of circle
+        shape.setPosition(sf::Vector2f(x, y)); //position of circle
+        shape.setFillColor(sf::Color::Red); //color red - color(state)
+        speed = -8.f; // speed of bullet  
+    }
+
+    void update() {
+        shape.move(sf::Vector2f(0.f, speed)); // x increases right (+) and y decreases (upwards) (-)                     // YE SALA PUTHA HA ! :/  
+    }                                          //SPEED KO SPEED NA SAMAJ !
+
+    bool isOffScreen() {
+        return shape.getPosition().y < 0;                                                                               //ye bharwa ptak gaya ha 
+    }
+
+    sf::CircleShape& getShape() { return shape; } //getter shape
+};
+
+// ================= PLAYER =================
+class Player {
+private:
+    sf::Sprite sprite;
+    float speed;
+    int health;
+
+public: //player sprite position and scale setting
+    Player(sf::Texture& tex) : sprite(tex) {            //composition sprite class object sprite
+        sprite.setPosition(sf::Vector2f(370.f, 520.f)); //set cordinates //tex as in texture passes player texture
+        sprite.setScale(sf::Vector2f(0.2f, 0.2f));  //scale of the sprite
+        speed = 6.f; //6.0
+        health = 5;
+    }
+
+    void move() {                           //states (key)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))  // moves left -6.0
+            sprite.move(sf::Vector2f(-speed, 0)); //movement of player sprite
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
+            sprite.move(sf::Vector2f(speed, 0)); //vertically same y x changes from -6 to 6 (range of x)
+
+        if (sprite.getPosition().x < 0) //out of corner of screen x left
+            sprite.setPosition(sf::Vector2f(0, sprite.getPosition().y)); //for position of y cordinate (unchanged)
+
+        if (sprite.getPosition().x > 740) //width 800 740limit x right
+            sprite.setPosition(sf::Vector2f(740, sprite.getPosition().y));
+    }
+
+    void takeDamage() { health--; }
+    int getHealth() { return health; } //getter for private member (health)
+
+    sf::Vector2f getPosition() { return sprite.getPosition(); }
+    sf::Sprite& getShape() { return sprite; }
+
+    void draw(sf::RenderWindow& window) {
+        window.draw(sprite);
+    }
+};
+
+// ================= ENEMY ================= 
+class Enemy {
+private:
+    sf::Sprite sprite;
+    float speed;
+
+public:       //Function call texture to -> sprite conversion //f represents float number 
+    Enemy(float x, sf::Texture& texture) : sprite(texture) {
+        sprite.setPosition(sf::Vector2f(x, 0.f));
+        sprite.setScale(sf::Vector2f(0.2f, 0.2f));
+        speed = 2.f; // speed 2.0
+    }
+
+    void update() {
+        sprite.move(sf::Vector2f(0.f, speed)); // 
+    }
+
+    bool isOffScreen() { //return type bool
+        return sprite.getPosition().y > 600; //if enemy sprite is vertically out of screen, then return true
+    }
+
+    sf::Sprite& getShape() { return sprite; }
+
+    void draw(sf::RenderWindow& window) {
+        window.draw(sprite);
+    }
+};
+
+// ================= MAIN =================
+int main() {
+    //srand for randomness of time  //converts time to unsigned int  //current time
+    srand((unsigned)time(nullptr));
+                            
+    //class     //function //class as argument // name of window //third optional style of window //state fourth argument
+    sf::RenderWindow window(sf::VideoMode(sf::Vector2u(800, 600)),"Sky Invaders - Beta Version");
+                       
+    window.setFramerateLimit(60);
+
+    // class Texture // texture role is being mapped to graphical entities
+    // Since the only role of a texture is to be loaded and mapped to graphical entities, 
+    // almost all its functions are about loading and updating it.
+	sf::Texture playerTex, enemyTex, bgTex; //objects created of texture class for player, enemy and background
+    if (!playerTex.loadFromFile("player.png")) return -1;
+    if (!enemyTex.loadFromFile("enemy.png")) return -1;
+    if (!bgTex.loadFromFile("background.png")) return -1;
+
+    sf::Sprite background(bgTex); //backgroud texture object passed
+
+    Player player(playerTex);
+
+	vector<Bullet> bullets; //dynamic lists of bullets and enemies, as the number of bullets and enemies can change during the game
+    vector<Enemy> enemies;
+
+    sf::Clock spawnTimer, shootTimer;
+
+    int score = 0;
+    bool gameOver = false;
+
+    // FONT
+    sf::Font font;
+    font.openFromFile("arial.ttf");
+
+    sf::Text scoreText(font);
+	scoreText.setCharacterSize(20); //for text size
+    scoreText.setPosition(sf::Vector2f(10, 10));
+
+    sf::Text healthText(font);
+    healthText.setCharacterSize(20);
+    healthText.setPosition(sf::Vector2f(10, 40));
+
+    sf::Text gameOverText(font);
+    gameOverText.setString("GAME OVER SHAMPIII!!!\nPress R to Restart");
+    gameOverText.setCharacterSize(40);
+    gameOverText.setPosition(sf::Vector2f(200, 250));
+
+    //Game while loop
+    while (window.isOpen()) {
+        // Event while loop - Refreshes until all game events are processed
+        while (auto event = window.pollEvent()) {
+           //Check only the close window function event -> window.close()
+           // is<T> returns true if the template argument matches the active event subtype is< Event :: Closed >
+            if (event->is<sf::Event::Closed>())
+                // Active event = window.close() = Template Argument <sf::Event::Closed> subtype of class even = Closed
+                window.close();
+            //Event is pending
+        }
+
+		if (!gameOver) { //bool variable to check if game is over or not, if not then move player and update game state
+
+            player.move(); //MOVING 
+
+			// SHOOT                                    //key (state) for shooting
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
+                if (shootTimer.getElapsedTime().asSeconds() > 0.3f) {   //delay for bullet
+                    bullets.push_back( 
+                        Bullet(player.getPosition().x + 25, //bullet from players center position 25(center)
+                            player.getPosition().y) //fired verticall from y position of player
+                    );
+					shootTimer.restart(); // when bullet shot timer restarts
+                }
+            }
+
+            // SPAWN ENEMY
+            if (spawnTimer.getElapsedTime().asSeconds() > 1.5f) {
+                enemies.push_back(Enemy(rand() % 700, enemyTex)); //size and texture
+                spawnTimer.restart();
+            }
+
+            // UPDATE BULLETS
+            for (int i = 0; i < bullets.size(); i++) {
+                bullets[i].update(); //moves bullets upwards
+                if (bullets[i].isOffScreen()) { //out of bounds bullets --
+                    bullets.erase(bullets.begin() + i);
+                    i--;
+                }
+            }
+
+            // UPDATE ENEMIES
+            for (int i = 0; i < enemies.size(); i++) {
+                enemies[i].update(); // updates or moves downwards
+                if (enemies[i].isOffScreen()) { 
+					enemies.erase(enemies.begin() + i);  // erase from memory and vector list
+                    i--;
+                }
+            }
+
+            // COLLISION
+            for (int i = 0; i < bullets.size(); i++) {  //bullet collumn and enemy row
+				for (int j = 0; j < enemies.size(); j++) {  //checks each bullet against every enemy for collision
+					if (bullets[i].getShape().getGlobalBounds()  // size and position of bullet
+                        .findIntersection(enemies[j].getShape().getGlobalBounds())) {
+
+                        bullets.erase(bullets.begin() + i);
+                        enemies.erase(enemies.begin() + j);
+                        score += 10;
+                        break;
+                    }
+                }
+            }
+
+            // ENEMY HITS PLAYER
+            for (int i = 0; i < enemies.size(); i++) {
+                if (enemies[i].getShape().getGlobalBounds()
+                    .findIntersection(player.getShape().getGlobalBounds())) {
+
+                    player.takeDamage();
+                    enemies.erase(enemies.begin() + i);
+                    i--;
+
+                    if (player.getHealth() <= 0)
+                        gameOver = true;
+                }
+            }
+
+            // UPDATE UI
+            scoreText.setString("Score: " + to_string(score));
+            healthText.setString("Health: " + to_string(player.getHealth()));
+        }
+
+        // RESTART
+        if (gameOver && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R)) {
+            player = Player(playerTex);
+            bullets.clear();
+            enemies.clear();
+            score = 0;
+            gameOver = false;
+        }
+
+        // User can resize window, as the clear() function also the windows boders to be refreshed, such as strecthing or adjusting it size 
+        window.clear();
+
+
+        window.draw(background);
+        player.draw(window);
+
+		for (auto& b : bullets) //type figured out by compiler auto keyword,
+            window.draw(b.getShape()); //reference to avoid copying, b is each bullet object in bullets vector list
+
+        for (auto& e : enemies)
+            e.draw(window);
+
+        window.draw(scoreText);
+        window.draw(healthText);
+
+        if (gameOver)
+            window.draw(gameOverText);
+
+        window.display();
+    }
+
+    return 0;
+}
